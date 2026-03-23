@@ -2,7 +2,7 @@
 
 The app routes questions through a **LangGraph** supervisor to specialist agents (analyst, news, portfolio), then aggregates answers with **LangChain** (`create_agent` + OpenAI tool calling) and **GPT-4o**. The UI uses a Bloomberg-style dark layout with watchlist, chat, and charts.
 
-Financial numbers come from a **deterministic mock data layer** so the project runs without paid market data APIs.
+Price data uses **yfinance** (real, free market data) with automatic fallback to a deterministic mock layer when live calls are unavailable.
 
 ## Screenshots
 
@@ -84,6 +84,18 @@ Without Compose:
 docker build -t finance-agent .
 docker run --rm -p 8501:8501 --env-file .env finance-agent
 ```
+
+---
+
+## Testing and CI
+
+Run tests locally:
+
+```bash
+pytest -q
+```
+
+GitHub Actions runs the same test command on every push and pull request via `.github/workflows/ci.yml`.
 
 ---
 
