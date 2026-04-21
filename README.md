@@ -1,228 +1,246 @@
-# FinAgent — Multi-Agent Stock Finance Chatbot
+# Multi-Agent Financial Intelligence Platform
 
-<p align="center">
-  <img src="https://img.shields.io/badge/LangGraph-4B0082?style=flat-square&logo=python&logoColor=white"/>
-  <img src="https://img.shields.io/badge/LangChain-111827?style=flat-square&logo=chainlink&logoColor=white"/>
-  <img src="https://img.shields.io/badge/GPT--4o-412991?style=flat-square&logo=openai&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Streamlit-FF4B4B?style=flat-square&logo=streamlit&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white"/>
-</p>
+Production-style AI orchestration platform for financial intelligence workflows.  
+The system routes user questions to specialist agents (analyst, news, portfolio), executes them in parallel, and aggregates outputs into a deterministic response with resilience and diagnostics.
 
-> A production-style multi-agent LLM system that routes
-> finance queries to specialist agents via parallel fan-out —
-> cutting query resolution time **~60%** vs. a single-agent
-> baseline, with fault tolerance so partial agent failure
-> never drops the full request.
-
----
-
-## Demo
-
-![FinAgent — main interface](image.png)
-
-![FinAgent — chat, routing, and detail panels](<image copy.png>)
-
----
-
-## Why Multi-Agent?
-
-Single LLM agents struggle with complex finance queries —
-they either miss context, hallucinate data, or take too long
-chaining tool calls sequentially.
-
-FinAgent solves this with a **LangGraph supervisor** that:
-- Decomposes the query and routes to specialist agents **in parallel**
-- Handles **partial agent failure** without dropping the full request
-- Aggregates specialist outputs into a single coherent response
-- Maintains **multi-turn memory** via MemorySaver + thread_id
-
----
+## Why This Platform
+- Converts finance Q&A into a modular multi-agent workflow.
+- Uses parallel specialist fan-out to reduce end-to-end latency.
+- Returns degraded-but-valid output during partial failures.
+- Keeps thread-isolated memory for multi-turn sessions.
+- Exposes both API and Streamlit interfaces for demo and product iteration.
 
 ## Architecture
 
-```
-User Query
-    │
-    ▼
-┌─────────────────────────────────────────┐
-│           SUPERVISOR NODE               │
-│  Decomposes query · Routes to agents   │
-│  Extracts ticker symbols · JSON output  │
-└────┬──────────┬──────────┬──────────────┘
-     │          │          │
-     ▼          ▼          ▼
-┌─────────┐ ┌────────┐ ┌───────────┐
-│ ANALYST │ │  NEWS  │ │ PORTFOLIO │
-│  NODE   │ │  NODE  │ │   NODE    │
-│         │ │        │ │           │
-│ create_ │ │create_ │ │  Direct   │
-│ agent + │ │agent + │ │ tool use  │
-│  tools  │ │  tools │ │           │
-└────┬────┘ └───┬────┘ └─────┬─────┘
-     │          │             │
-     └──────────┴─────────────┘
-                │
-                ▼
-     ┌──────────────────────┐
-     │   AGGREGATOR NODE    │
-     │  Synthesizes outputs │
-     │  into final response │
-     └──────────┬───────────┘
-                ▼
-              END
+```text
+UI / API Request
+    -> Supervisor (structured route decision + ticker + confidence)
+    -> Parallel Specialists (analyst, news, portfolio)
+    -> Structured Aggregator (executive summary + outputs + warnings + metadata)
+    -> Deterministic Platform Response
 ```
 
-**Step by step:**
-1. **Supervisor** — LLM returns structured JSON: routes, symbols, reasoning
-2. **Conditional edges** — Fan-out to analyst, news, and/or portfolio nodes in parallel
-3. **Analyst / News** — `create_agent` runs a LangGraph tool loop via OpenAI function calling
-4. **Portfolio** — Direct tool calls for portfolio calculations
-5. **Aggregator** — LLM merges all specialist outputs into one markdown reply
-6. **MemorySaver** — Checkpointer + `thread_id` for persistent multi-turn sessions
+### Architecture Diagram
+```mermaid
+flowchart LR
+    A[User Query<br/>API or Streamlit] --> B[Supervisor Node<br/>route + ticker + confidence]
+    B --> C1[Analyst Agent]
+    B --> C2[News Agent]
+    B --> C3[Portfolio Agent]
+    C1 --> D[Structured Aggregator]
+    C2 --> D
+    C3 --> D
+    D --> E[Deterministic Response<br/>summary + outputs + warnings + metadata]
+```
 
----
+### Layered Modules
+- `app / UI`: Streamlit dashboard (`app.py`)
+- `graph orchestration`: `src/fin_platform/graph.py`
+- `agents`: `src/fin_platform/agents.py`
+- `tools/providers/services`: `src/fin_platform/providers.py`
+- `memory`: `src/fin_platform/memory.py`
+- `config`: `src/fin_platform/config.py`
+- `observability`: `src/fin_platform/observability.py`
+- `api`: `src/api/main.py`
 
-## Key Technical Patterns
+## System Flow
+1. User submits query with `thread_id`.
+2. Supervisor returns typed decision (`routes`, `ticker`, `confidence`, `fallback_reason`).
+3. Selected specialists run concurrently with timeout + retry controls.
+4. Aggregator composes a consistent response object:
+   - `executive_summary`
+   - `specialist_outputs`
+   - `warnings`
+   - `metadata` (latency, completeness, route coverage, confidence)
+5. Response is returned even when one or more specialists fail.
 
-| Pattern | Location | Purpose |
-|---|---|---|
-| `StateGraph(AgentState)` | `graph_builder.py` | Shared typed state across all nodes |
-| `add_messages` reducer | `state.py` | Append-only message history |
-| Conditional edges (list → parallel) | `graph_builder.py` | Multi-agent fan-out |
-| `MemorySaver` | `graph_builder.py` | Persistent conversation state |
-| `create_agent` | `analyst_agent.py`, `news_agent.py` | Tool-calling sub-agent graphs |
-| `@tool` decorators | `tools/*.py` | LangChain tool definitions |
-| `JsonOutputParser` | `supervisor.py` | Structured supervisor routing |
-| `thread_id` | `memory/conversation.py` | Session isolation per user |
+## Fault Tolerance
+- Specialist failures are isolated and logged.
+- Partial failures append warnings without crashing full request.
+- Route-level retries are applied with bounded attempts.
+- Timeout handling prevents long-tail specialist stalls.
 
----
+## Data Providers
+- `MockDataProvider` for deterministic development and testing.
+- `YFinanceProvider` for live market/news reads.
+- `FutureProviderPlaceholder` for upcoming integrations.
 
-## Stack
+Provider selection is controlled by env config (`DATA_MODE`, `ENABLE_LIVE_DATA`).
 
-| Layer | Technology |
-|---|---|
-| Orchestration | LangGraph · LangChain |
-| LLM | GPT-4o (OpenAI) |
-| Market Data | yfinance + deterministic mock fallback |
-| UI | Streamlit — Bloomberg-style dark layout |
-| Containerization | Docker · Docker Compose |
-| Testing / CI | pytest · GitHub Actions |
-
----
-
-## Quick Start
-
-### Prerequisites
-- Python 3.12+
-- OpenAI API key
-- Docker Desktop (optional)
-
-### Local
+## Setup
 
 ```bash
-git clone https://github.com/pulipakav1/finance_agent.git
-cd finance_agent
-
 python -m venv venv
-source venv/bin/activate        # macOS/Linux
-# .\venv\Scripts\Activate.ps1  # Windows PowerShell
-
+venv\Scripts\activate  # Windows
 pip install -r requirements.txt
+```
 
-cp .env.example .env
-# Add your OPENAI_API_KEY to .env
+### Run API
+```bash
+uvicorn src.api.main:app --reload --host 127.0.0.1 --port 8000
+```
 
+### Run Streamlit
+```bash
 streamlit run app.py
 ```
 
-Open **http://localhost:8501**
+### Run on Custom Port (Recommended if 8000 occupied)
+```bash
+uvicorn src.api.main:app --reload --host 127.0.0.1 --port 8010
+set STREAMLIT_API_BASE_URL=http://127.0.0.1:8010
+streamlit run app.py
+```
 
-### Docker
+## Mock vs Live Data
+
+Default mode is deterministic mock mode.
+
+### Mock mode
+```bash
+set DATA_MODE=mock
+set ENABLE_LIVE_DATA=false
+```
+
+### Live mode (yfinance)
+```bash
+set DATA_MODE=live
+set ENABLE_LIVE_DATA=true
+```
+
+Restart API after changing mode flags.
+
+## API Contract
+
+`POST /query`
+
+```json
+{
+  "query": "Analyze AAPL trend and recent sentiment",
+  "thread_id": "demo-thread-1",
+  "session_metadata": {"client": "streamlit"},
+  "conversation_history": [{"role": "user", "content": "Earlier context"}]
+}
+```
+
+Returns deterministic structure:
+- `executive_summary`
+- `specialist_outputs`
+- `warnings`
+- `metadata`
+
+### Example Health Response
+```json
+{
+  "status": "ok",
+  "graph_ready": true,
+  "data_mode": "mock"
+}
+```
+
+### Example Multi-Agent Query Response
+```json
+{
+  "executive_summary": "Financial intelligence synthesis for NVDA completed.",
+  "specialist_outputs": {
+    "analyst": {
+      "ticker": "NVDA",
+      "technical_trend": "NVDA trend is bullish with SMA20 184.40 vs SMA50 178.10.",
+      "price_movement_summary": "Last close 190.20, daily move 1.30%.",
+      "indicator_explanation": "SMA20 above SMA50 suggests near-term momentum; gap size indicates trend strength.",
+      "confidence": 0.76
+    },
+    "news": {
+      "ticker": "NVDA",
+      "headlines": [
+        "NVDA launches new enterprise AI feature",
+        "NVDA faces antitrust hearing"
+      ],
+      "sentiment_summary": "News flow is balanced/neutral.",
+      "extracted_events": [
+        {
+          "headline": "NVDA launches new enterprise AI feature",
+          "sentiment": "positive",
+          "event_type": "product"
+        },
+        {
+          "headline": "NVDA faces antitrust hearing",
+          "sentiment": "negative",
+          "event_type": "regulatory"
+        }
+      ],
+      "confidence": 0.72
+    }
+  },
+  "warnings": [],
+  "metadata": {
+    "route_coverage": [
+      "analyst",
+      "news"
+    ],
+    "completeness": 1.0,
+    "supervisor_confidence": 0.68,
+    "latency_ms": 29.04
+  }
+}
+```
+
+## UI Behavior Notes
+- Streamlit validates both `/health` and `/query` availability.
+- If the API base points to a different app, the UI disables "Run Analysis" and shows a routing/config error instead of crashing.
+- Warnings are route-aware: only routed-but-missing specialist outputs are flagged.
+
+## Troubleshooting
+
+### `{"detail":"Not Found"}` on `/query`
+Usually indicates Streamlit is pointed to a non-FinAgent service.
 
 ```bash
-docker compose up --build
+# PowerShell (same terminal before starting Streamlit)
+$env:STREAMLIT_API_BASE_URL = "http://127.0.0.1:8010"
+python -m streamlit run app.py
 ```
 
-Open **http://localhost:8501**
-
-Without Compose:
-
+Verify the target API exposes `/query`:
 ```bash
-docker build -t finance-agent .
-docker run --rm -p 8501:8501 --env-file .env finance-agent
+Invoke-RestMethod http://127.0.0.1:8010/openapi.json
 ```
 
----
-
-## Example Queries
-
-```
-"Analyze NVDA — full technical breakdown"
-"Compare AAPL and MSFT — which looks stronger?"
-"Latest news and sentiment for TSLA"
-"Portfolio breakdown: AAPL:10, MSFT:5, NVDA:8, AMZN:12"
-"Risk analysis for NVDA:20, AMD:15"
-"META — technicals plus recent news"
+### `ModuleNotFoundError` when starting API
+Run with project virtualenv:
+```bash
+.\venv\Scripts\python -m uvicorn src.api.main:app --reload --host 127.0.0.1 --port 8010
 ```
 
----
-
-## Project Structure
-
-```
-finance_agent/
-├── app.py                 # Streamlit entrypoint
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-├── .env.example
-├── graph/
-│   ├── state.py           # AgentState + reducers
-│   ├── graph_builder.py   # StateGraph + MemorySaver
-│   └── nodes.py           # All node implementations
-├── agents/
-│   ├── supervisor.py      # Query routing + JSON parsing
-│   ├── analyst_agent.py   # create_agent (LangGraph)
-│   ├── news_agent.py
-│   └── agent_helpers.py
-├── tools/                 # @tool functions
-├── memory/
-│   └── conversation.py    # Thread / session helpers
-├── prompts/
-│   └── templates.py
-└── utils/
-    └── mock_data.py       # Deterministic mock market data
-```
-
----
+### Button disabled in Streamlit
+- Confirm API is running and reachable.
+- Confirm `STREAMLIT_API_BASE_URL` matches API host/port.
+- Confirm `/openapi.json` includes `/query`.
 
 ## Testing
 
 ```bash
-pytest -q
+venv\Scripts\python -m pytest -q
 ```
 
-CI runs automatically on every push via `.github/workflows/ci.yml`
+Coverage includes:
+- supervisor routing logic
+- specialist agent contracts
+- aggregation output + partial failure handling
+- provider behavior
+- memory/session behavior
+- graph service integration
 
----
+## Demo Queries
+- `NVDA trend`
+- `NVDA trend and latest news sentiment`
+- `Analyze NVDA trend, recent news sentiment, and portfolio concentration risk`
 
-## Notes
+## Docker
+Use existing `Dockerfile` and compose workflow; run the same API/UI entrypoints in containers.
 
-- **Mock data** — Prices, news, and indicators use a
-  deterministic mock layer by default. Replace
-  `utils/mock_data.py` with live `yfinance` or
-  Alpha Vantage calls for production use.
-- **API costs** — GPT-4o is used by default. Switch
-  to `gpt-4o-mini` in agent modules to reduce cost
-  during development.
-- **Disclaimer** — Educational demo, not investment advice.
-
----
-
-## License
-
-MIT — use and modify freely.
-
----
-
+## Roadmap
+- LLM-based supervisor classifier with strict JSON schema parsing.
+- External metrics sink (Prometheus/OpenTelemetry).
+- Broker/execution connectors and authenticated user portfolios.
+- Advanced risk analytics (factor decomposition, VaR stress scenarios).
