@@ -13,7 +13,7 @@ NEWS_TOOLS = [get_stock_news, get_market_sentiment]
 class NewsAgent:
 
     def __init__(self):
-        self.graph = create_react_agent(llm, tools=NEWS_TOOLS, messages_modifier=SystemMessage(content=NEWS_SYSTEM_PROMPT))
+        self.graph = create_react_agent(llm, tools=NEWS_TOOLS, state_modifier=SystemMessage(content=NEWS_SYSTEM_PROMPT))
 
     def analyze(self, query: str, chat_history: list=None) -> dict:
         messages = []

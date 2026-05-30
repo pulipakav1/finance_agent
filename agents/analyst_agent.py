@@ -14,7 +14,7 @@ ANALYST_TOOLS = [get_stock_price, compare_stocks, get_technical_indicators, get_
 class AnalystAgent:
 
     def __init__(self):
-        self.graph = create_react_agent(llm, tools=ANALYST_TOOLS, messages_modifier=SystemMessage(content=ANALYST_SYSTEM_PROMPT))
+        self.graph = create_react_agent(llm, tools=ANALYST_TOOLS, state_modifier=SystemMessage(content=ANALYST_SYSTEM_PROMPT))
 
     def analyze(self, query: str, chat_history: list=None) -> dict:
         messages = []
