@@ -61,11 +61,15 @@ flowchart LR
 - Timeout handling prevents long-tail specialist stalls.
 
 ## Data Providers
-- `MockDataProvider` for deterministic development and testing.
-- `YFinanceProvider` for live market/news reads.
-- `FutureProviderPlaceholder` for upcoming integrations.
+
+| Provider | Market data | News sentiment | Portfolio |
+|---|---|---|---|
+| `MockDataProvider` | Hardcoded snapshot | Labelled mock headlines | Fixed 4-stock demo |
+| `YFinanceProvider` | Live prices, SMA20/SMA50 via yfinance | Live headlines + **VADER** polarity scoring | Live prices × 100 shares for AAPL/NVDA/MSFT/TSLA |
 
 Provider selection is controlled by env config (`DATA_MODE`, `ENABLE_LIVE_DATA`).
+
+News sentiment in live mode uses **VADER** (`vaderSentiment`) to classify each headline as `positive`, `negative`, or `neutral` based on compound polarity score — no external API required.
 
 ## Setup
 
@@ -112,7 +116,15 @@ Restart API after changing mode flags.
 
 ## API Contract
 
-`POST /query`
+### Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/health` | Platform + graph readiness check |
+| `GET` | `/metrics` | In-memory counters and p50/p95/p99 latency per operation |
+| `POST` | `/query` | Multi-agent financial intelligence query |
+
+### `POST /query`
 
 ```json
 {
@@ -135,6 +147,21 @@ Returns deterministic structure:
   "status": "ok",
   "graph_ready": true,
   "data_mode": "mock"
+}
+```
+
+### Example Metrics Response (`GET /metrics`)
+```json
+{
+  "counters": {
+    "supervisor_calls": 4,
+    "analyst_success": 3,
+    "news_success": 2
+  },
+  "timings": {
+    "supervisor_ms": { "count": 4, "mean_ms": 1.2, "p50_ms": 1.1, "p95_ms": 1.8, "p99_ms": 1.9 },
+    "aggregation_ms": { "count": 4, "mean_ms": 0.4, "p50_ms": 0.3, "p95_ms": 0.6, "p99_ms": 0.6 }
+  }
 }
 ```
 
@@ -240,7 +267,7 @@ Coverage includes:
 Use existing `Dockerfile` and compose workflow; run the same API/UI entrypoints in containers.
 
 ## Roadmap
-- LLM-based supervisor classifier with strict JSON schema parsing.
-- External metrics sink (Prometheus/OpenTelemetry).
-- Broker/execution connectors and authenticated user portfolios.
+- LLM-based supervisor classifier with strict JSON schema parsing (current: keyword routing).
+- Prometheus/OpenTelemetry sink for the `/metrics` counters and timings.
+- Broker/execution connectors for authenticated user portfolios (current: live yfinance demo portfolio).
 - Advanced risk analytics (factor decomposition, VaR stress scenarios).
