@@ -1,8 +1,8 @@
 import os
 from dotenv import load_dotenv
-from langchain.agents import create_agent
+from langgraph.prebuilt import create_react_agent
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from agents.agent_helpers import final_ai_text_from_messages, tool_calls_log_from_messages
 from prompts.templates import NEWS_SYSTEM_PROMPT
 from tools.stock_tools import get_stock_news, get_market_sentiment
@@ -13,7 +13,7 @@ NEWS_TOOLS = [get_stock_news, get_market_sentiment]
 class NewsAgent:
 
     def __init__(self):
-        self.graph = create_agent(model=llm, tools=NEWS_TOOLS, system_prompt=NEWS_SYSTEM_PROMPT)
+        self.graph = create_react_agent(llm, tools=NEWS_TOOLS, messages_modifier=SystemMessage(content=NEWS_SYSTEM_PROMPT))
 
     def analyze(self, query: str, chat_history: list=None) -> dict:
         messages = []
