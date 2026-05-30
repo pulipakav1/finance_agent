@@ -7,8 +7,11 @@ from dataclasses import dataclass
 from typing import Any
 
 import yfinance as yf
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 from src.fin_platform.config import settings
+
+_vader = SentimentIntensityAnalyzer()
 
 
 @dataclass
@@ -65,29 +68,41 @@ class YFinanceProvider(DataProvider):
 
     def get_news(self, ticker: str) -> list[dict[str, Any]]:
         raw_news = yf.Ticker(ticker).news[:5]
-        return [
-            {
-                "headline": item.get("title", "Untitled"),
-                "sentiment": "neutral",
+        results = []
+        for item in raw_news:
+            headline = item.get("title", "Untitled")
+            score = _vader.polarity_scores(headline)["compound"]
+            if score >= 0.05:
+                sentiment = "positive"
+            elif score <= -0.05:
+                sentiment = "negative"
+            else:
+                sentiment = "neutral"
+            results.append({
+                "headline": headline,
+                "sentiment": sentiment,
                 "event_type": "market",
-            }
-            for item in raw_news
-        ]
+            })
+        return results
 
     def get_portfolio(self) -> list[dict[str, Any]]:
-        # Placeholder for future broker integration.
-        return MockDataProvider().get_portfolio()
-
-
-class FutureProviderPlaceholder(DataProvider):
-    def get_market_snapshot(self, ticker: str) -> MarketSnapshot:
-        raise NotImplementedError("FutureProviderPlaceholder is not implemented")
-
-    def get_news(self, ticker: str) -> list[dict[str, Any]]:
-        raise NotImplementedError("FutureProviderPlaceholder is not implemented")
-
-    def get_portfolio(self) -> list[dict[str, Any]]:
-        raise NotImplementedError("FutureProviderPlaceholder is not implemented")
+        tickers = ["AAPL", "NVDA", "MSFT", "TSLA"]
+        positions = []
+        total_value = 0.0
+        snapshots = []
+        for t in tickers:
+            try:
+                hist = yf.Ticker(t).history(period="1d")
+                price = float(hist["Close"].iloc[-1]) if not hist.empty else 0.0
+            except Exception:
+                price = 0.0
+            value = price * 100  # demo: 100 shares each
+            snapshots.append((t, price, value))
+            total_value += value
+        for ticker_sym, price, value in snapshots:
+            weight = round(value / total_value, 4) if total_value else 0.0
+            positions.append({"ticker": ticker_sym, "weight": weight, "value": round(value, 2)})
+        return positions
 
 
 def build_provider() -> DataProvider:

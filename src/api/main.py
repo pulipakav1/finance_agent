@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from src.fin_platform.config import settings
 from src.fin_platform.graph import FinancialIntelligenceGraph
-from src.fin_platform.observability import logger, setup_logging
+from src.fin_platform.observability import logger, metrics, setup_logging
 
 platform_graph: FinancialIntelligenceGraph | None = None
 
@@ -42,6 +42,25 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {"status": "ok", "graph_ready": platform_graph is not None, "data_mode": settings.data_mode}
+
+
+@app.get("/metrics")
+def get_metrics() -> dict[str, Any]:
+    summary: dict[str, Any] = {"counters": dict(metrics.counters)}
+    timing_summary = {}
+    for key, values in metrics.timings_ms.items():
+        if values:
+            sorted_v = sorted(values)
+            n = len(sorted_v)
+            timing_summary[key] = {
+                "count": n,
+                "mean_ms": round(sum(sorted_v) / n, 2),
+                "p50_ms": round(sorted_v[n // 2], 2),
+                "p95_ms": round(sorted_v[min(int(n * 0.95), n - 1)], 2),
+                "p99_ms": round(sorted_v[min(int(n * 0.99), n - 1)], 2),
+            }
+    summary["timings"] = timing_summary
+    return summary
 
 
 @app.post("/query")

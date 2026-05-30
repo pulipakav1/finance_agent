@@ -10,9 +10,20 @@ from src.fin_platform.state import SupervisorDecision
 
 TICKER_RE = re.compile(r"\b[A-Z]{1,5}\b")
 
+_STOPWORDS = {
+    "I", "A", "AN", "THE", "IS", "ARE", "WAS", "WERE", "BE", "BEEN",
+    "HAS", "HAVE", "HAD", "DO", "DID", "DOES", "WILL", "CAN", "COULD",
+    "SHOULD", "WOULD", "MAY", "MIGHT", "SHALL", "NOT", "AND", "OR",
+    "BUT", "IF", "IN", "ON", "AT", "TO", "OF", "FOR", "BY", "WITH",
+    "FROM", "UP", "MY", "YOUR", "HIS", "HER", "ITS", "OUR", "US",
+    "IT", "ME", "YOU", "HE", "SHE", "WE", "THEY", "THEM", "WHAT",
+    "WHO", "HOW", "WHY", "WHEN", "WHERE", "WHICH", "ALL", "ETF", "CEO",
+    "IPO", "GDP", "SEC", "FED", "AI", "EPS",
+}
+
 
 def _extract_ticker(query: str) -> str | None:
-    matches = TICKER_RE.findall(query)
+    matches = [m for m in TICKER_RE.findall(query) if m not in _STOPWORDS]
     return matches[0] if matches else None
 
 
